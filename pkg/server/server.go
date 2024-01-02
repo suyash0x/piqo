@@ -1,14 +1,30 @@
 package server
 
 import (
+	"encoding/json"
 	"io"
 	"log"
 	"net"
 
+	"github.com/suyash0x/piqo/pkg/broker"
 	"github.com/suyash0x/piqo/pkg/helpers"
 )
 
-type Server struct{}
+type brokerModule interface {
+	AddTopic(net.Conn)
+	GetMessage(net.Conn)
+	PostMessage(net.Conn)
+}
+
+type Server struct {
+	brokerModule
+}
+
+type Request struct {
+	Action  string `json:"action"`
+	Topic   string `json:"topic"`
+	Message any    `json:"message"`
+}
 
 func (s *Server) handleConn(conn net.Conn) {
 	defer func() {
@@ -17,26 +33,42 @@ func (s *Server) handleConn(conn net.Conn) {
 			helpers.LogError("closing connection", err)
 			return
 		}
-		log.Println("connection closed successfully", conn.RemoteAddr().String())
-
 	}()
 
 	for {
-		buffer := make([]byte, 1024)
-		n, err := conn.Read(buffer)
+		var request Request
+		data, err := helpers.ReadConn(conn)
 
-		helpers.LogError("Reading data from connection", err)
-
-		if err == io.EOF {
-			break
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			helpers.LogError("Reading connection", err)
+			continue
 		}
 
-		request := buffer[:n]
+		err = json.Unmarshal(data, &request)
 
-		_, err = conn.Write(request)
+		if err != nil {
+			helpers.WriteConn(conn, "Error converting request JSON")
+			return
+		}
 
-		helpers.LogError("Writing data to connection", err)
+		switch request.Action {
+		case "produce":
+			s.PostMessage(conn)
+		case "consume":
+			s.GetMessage(conn)
+		case "add-topic":
+			s.AddTopic(conn)
+		default:
+			helpers.WriteConn(conn, "Invalid action")
+			continue
+		}
+
+		helpers.WriteConn(conn, "OK")
 	}
+
 }
 
 func (s *Server) StartServer() {
@@ -55,5 +87,7 @@ func (s *Server) StartServer() {
 }
 
 func NewServer() *Server {
-	return &Server{}
+	return &Server{
+		brokerModule: broker.NewBroker(),
+	}
 }
