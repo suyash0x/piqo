@@ -1,7 +1,10 @@
 package main
 
-import "log"
+import (
+	"github.com/suyash0x/piqo/pkg/piqo"
+)
 
 func main() {
-	log.Println("server is running")
+	piqo := piqo.New()
+	piqo.StartServer()
 }
