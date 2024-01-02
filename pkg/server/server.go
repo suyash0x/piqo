@@ -51,7 +51,7 @@ func (s *Server) handleConn(conn net.Conn) {
 
 		if err != nil {
 			helpers.WriteConn(conn, "Error converting request JSON")
-			return
+			continue
 		}
 
 		switch request.Action {
@@ -63,10 +63,8 @@ func (s *Server) handleConn(conn net.Conn) {
 			s.AddTopic(conn)
 		default:
 			helpers.WriteConn(conn, "Invalid action")
-			continue
 		}
 
-		helpers.WriteConn(conn, "OK")
 	}
 
 }
